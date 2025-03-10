@@ -116,7 +116,7 @@ def create_new_user():
 
  
  
-def check_password():
+# def check_password():
     """Returns `True` if the user had the correct password."""
  
     def password_entered():
@@ -139,7 +139,37 @@ def check_password():
         st.error("😕 Password incorrect")
     return False
  
+def check_password():
+    """Returns `True` if the user entered a valid username and password."""
+    
+    def password_entered():
+        """Checks whether the entered username and password are correct."""
+        username = st.session_state.get("username")
+        password = st.session_state.get("password")
+        
+        # 檢查所輸入的使用者名稱和密碼是否與 secrets.toml 中的資料匹配
+        if username in st.secrets and hmac.compare_digest(password, st.secrets[username]["password"]):
+            st.session_state["authentication_status"] = True
+        else:
+            st.session_state["authentication_status"] = False
+        # 清除密碼欄位，不在 session_state 中保存密碼
+        del st.session_state["password"]
 
+    # 如果已驗證成功，返回 True
+    if st.session_state.get("authentication_status", False):
+        return True
+
+    # 顯示使用者名稱和密碼輸入欄位
+    username = st.text_input("Username", key="username")
+    password = st.text_input("Password", type="password", on_change=password_entered, key="password")
+
+    # 提示使用者輸入正確的使用者名稱和密碼
+    if "authentication_status" in st.session_state:
+        if st.session_state["authentication_status"] == False:
+            st.error("😕 使用者名稱或密碼錯誤")
+        else:
+            st.warning("請輸入使用者名稱和密碼")
+    return False
 
 if __name__ == "__main__":
 
