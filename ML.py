@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 
+import hmac
+
 import plotly.express as px
 import pickle
 from Train_2 import train_and_plot
@@ -97,236 +99,271 @@ def create_new_user():
 
 
 
-# Streamlit app
-st.title("Machine Learning Platform")
 
-# Sidebar for selecting name
-st.sidebar.header("User Selection")
 
-# Initialize session state
-if 'show_dialog' not in st.session_state:
-    st.session_state['show_dialog'] = False
-if 'users' not in st.session_state:
-    st.session_state['users'] = load_names()
-if 'selected_user' not in st.session_state:
-    st.session_state['selected_user'] = None
 
-# Add New User button
-if st.sidebar.button("Add New User"):
-    st.session_state['show_dialog'] = True
-
-# Show dialog if button was clicked
-if st.session_state['show_dialog']:
-    if create_new_user():
-        st.sidebar.success("New user created successfully!")
-
-# User selection dropdown
-name = st.sidebar.selectbox(
-    "Select User",
-    options=st.session_state['users'],
-    index=st.session_state['users'].index(st.session_state['selected_user']) if st.session_state['selected_user'] in st.session_state['users'] else 0
-) if st.session_state['users'] else None
-
-if not st.session_state['users']:
-    st.sidebar.warning("No users found. Please create a new user.")
-
-# Create tabs
-tab1, tab2, tab3 = st.tabs(["Data Management", "Model Training", "Prediction"])
-
-with tab1:
-    st.header("Data Upload and Display")
-    # Set directory based on selected name
-    directory = f"D:/Jason/webapp/ML/data/{name}"
-    files = load_files(directory)
-    selected_file = st.selectbox("Select an Excel file from directory", files)
-
-    # Upload file
-    uploaded_file_path = upload_file(directory)
-
-    # Read file button
-    if st.button("Read File"):
-        if uploaded_file_path:
-            df = display_dataframe(uploaded_file_path)
-            st.session_state['df'] = df
-        elif selected_file:
-            df = display_dataframe(os.path.join(directory, selected_file))
-            st.session_state['df'] = df
-
-    # Display the dataframe if it exists
-    if 'df' in st.session_state:
-        st.write("Current Dataset:")
-        st.write(st.session_state['df'])
-
-with tab2:
-    st.header("Model Training and Evaluation")
-    if 'df' in st.session_state:
-        df = st.session_state['df']
-        
-        # Select task type
-        task_type = st.selectbox(
-            "Select Task Type",
-            ["regression", "classification"],
-            key='task_type'
-        )
-        
-        # Select columns for X and Y
-        columns = df.columns.tolist()
-        x_columns = st.multiselect("Select Features (X)", columns, key='x_columns')
-        y_columns = st.multiselect("Select Target (Y)", columns, key='y_columns')
-        
-        # Model selection based on task type
-        if task_type == 'regression':
-            model_options = [
-                "Linear Regression",
-                "Random Forest",
-                "Gradient Boosting",
-                "XGBoost",
-                "LightGBM"
-            ]
+ 
+ 
+def check_password():
+    """Returns `True` if the user had the correct password."""
+ 
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if hmac.compare_digest(st.session_state["password"], st.secrets["password"]):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store the password.
         else:
-            model_options = [
-                "Logistic Regression",
-                "Random Forest",
-                "Gradient Boosting",
-                "XGBoost",
-                "LightGBM"
-            ]
-            
-        model_type = st.selectbox("Select Model Type", model_options, key='model_type')
-        
-        if st.button("Train Model"):
-            model = train_and_plot(df, x_columns, y_columns, task_type, model_type)
-            st.session_state['trained_model'] = model
-        
-        # Add download button if model exists in session state
-        if 'trained_model' in st.session_state:
-            model = st.session_state['trained_model']
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.download_button(
-                    label="Download Trained Model",
-                    data=pickle.dumps(model),
-                    file_name=f"{model_type.lower().replace(' ', '_')}_model.pkl",
-                    mime="application/octet-stream"
-                ):
-                    st.success("Model downloaded successfully!")
-            
-            with col2:
-                # Create a container for the save functionality
-                with st.container():
-                    custom_filename = st.text_input(
-                        "Enter model filename (optional)", 
-                        value=f"{model_type.lower().replace(' ', '_')}_model",
-                        key="model_filename"
-                    )
-                    if st.button("Save Model to Directory"):
-                        model_directory = f"D:/Jason/webapp/ML/model/{name}"
-                        # Add .pkl extension if not present
-                        if not custom_filename.endswith('.pkl'):
-                            custom_filename += '.pkl'
-                        # Create full file path
-                        file_path = os.path.join(model_directory, custom_filename)
-                        # Create directory if it doesn't exist
-                        os.makedirs(model_directory, exist_ok=True)
-                        # Save the model
-                        with open(file_path, 'wb') as f:
-                            pickle.dump(model, f)
-                        st.success(f"Model saved successfully to: {file_path}")
-    else:
-        st.warning("Please upload or select a dataset in the Data Management tab first.")
+            st.session_state["password_correct"] = False
+ 
+    # Return True if the password is validated.
+    if st.session_state.get("password_correct", False):
+        return True
+ 
+    # Show input for password.
+    st.text_input(
+        "Password", type="password", on_change=password_entered, key="password"
+    )
+    if "password_correct" in st.session_state:
+        st.error("😕 Password incorrect")
+    return False
+ 
 
 
-# Add the new tab3 content:
-with tab3:
-    st.header("Model Prediction")
-    
-    # Create two columns for uploading
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Upload data for prediction
-        pred_file = st.file_uploader("Upload Excel or CSV file for prediction", 
-                                    type=["xlsx", "csv"], 
-                                    key="pred_file")
-        if pred_file:
-            if pred_file.name.endswith('.xlsx'):
-                pred_df = pd.read_excel(pred_file)
-            else:  # CSV file
-                pred_df = pd.read_csv(pred_file)
-            st.session_state['pred_df'] = pred_df
-            st.write("Prediction Data Preview:")
-            st.write(pred_df)
-    
-    with col2:
-        # Model selection/upload
-        model_source = st.radio("Select model source", ["Upload Model", "Select Saved Model"])
-        
-        if model_source == "Upload Model":
-            uploaded_model = st.file_uploader("Upload model file", type=["pkl"], key="model_upload")
-            if uploaded_model:
-                model = pickle.loads(uploaded_model.read())
-                st.session_state['pred_model'] = model
-                st.success("Model loaded successfully!")
-        
-        else:
-            model_directory = f"D:/Jason/webapp/ML/model/{name}"
-            if os.path.exists(model_directory):
-                saved_models = load_models(model_directory)
-                if saved_models:
-                    selected_model = st.selectbox("Select a saved model", saved_models)
-                    if selected_model:
-                        model_path = os.path.join(model_directory, selected_model)
-                        model = load_model(model_path)
-                        st.session_state['pred_model'] = model
-                        st.success("Model loaded successfully!")
-                else:
-                    st.warning("No saved models found in directory")
+if __name__ == "__main__":
+    if not check_password():
+        st.stop()
+
+
+    # Streamlit app
+    st.title("Machine Learning Platform")
+
+    # Sidebar for selecting name
+    st.sidebar.header("User Selection")
+
+    # Initialize session state
+    if 'show_dialog' not in st.session_state:
+        st.session_state['show_dialog'] = False
+    if 'users' not in st.session_state:
+        st.session_state['users'] = load_names()
+    if 'selected_user' not in st.session_state:
+        st.session_state['selected_user'] = None
+
+    # Add New User button
+    if st.sidebar.button("Add New User"):
+        st.session_state['show_dialog'] = True
+
+    # Show dialog if button was clicked
+    if st.session_state['show_dialog']:
+        if create_new_user():
+            st.sidebar.success("New user created successfully!")
+
+    # User selection dropdown
+    name = st.sidebar.selectbox(
+        "Select User",
+        options=st.session_state['users'],
+        index=st.session_state['users'].index(st.session_state['selected_user']) if st.session_state['selected_user'] in st.session_state['users'] else 0
+    ) if st.session_state['users'] else None
+
+    if not st.session_state['users']:
+        st.sidebar.warning("No users found. Please create a new user.")
+
+    # Create tabs
+    tab1, tab2, tab3 = st.tabs(["Data Management", "Model Training", "Prediction"])
+
+    with tab1:
+        st.header("Data Upload and Display")
+        # Set directory based on selected name
+        directory = f"D:/Jason/webapp/ML/data/{name}"
+        files = load_files(directory)
+        selected_file = st.selectbox("Select an Excel file from directory", files)
+
+        # Upload file
+        uploaded_file_path = upload_file(directory)
+
+        # Read file button
+        if st.button("Read File"):
+            if uploaded_file_path:
+                df = display_dataframe(uploaded_file_path)
+                st.session_state['df'] = df
+            elif selected_file:
+                df = display_dataframe(os.path.join(directory, selected_file))
+                st.session_state['df'] = df
+
+        # Display the dataframe if it exists
+        if 'df' in st.session_state:
+            st.write("Current Dataset:")
+            st.write(st.session_state['df'])
+
+    with tab2:
+        st.header("Model Training and Evaluation")
+        if 'df' in st.session_state:
+            df = st.session_state['df']
+            
+            # Select task type
+            task_type = st.selectbox(
+                "Select Task Type",
+                ["regression", "classification"],
+                key='task_type'
+            )
+            
+            # Select columns for X and Y
+            columns = df.columns.tolist()
+            x_columns = st.multiselect("Select Features (X)", columns, key='x_columns')
+            y_columns = st.multiselect("Select Target (Y)", columns, key='y_columns')
+            
+            # Model selection based on task type
+            if task_type == 'regression':
+                model_options = [
+                    "Linear Regression",
+                    "Random Forest",
+                    "Gradient Boosting",
+                    "XGBoost",
+                    "LightGBM"
+                ]
             else:
-                st.warning("Model directory does not exist")
+                model_options = [
+                    "Logistic Regression",
+                    "Random Forest",
+                    "Gradient Boosting",
+                    "XGBoost",
+                    "LightGBM"
+                ]
+                
+            model_type = st.selectbox("Select Model Type", model_options, key='model_type')
+            
+            if st.button("Train Model"):
+                model = train_and_plot(df, x_columns, y_columns, task_type, model_type)
+                st.session_state['trained_model'] = model
+            
+            # Add download button if model exists in session state
+            if 'trained_model' in st.session_state:
+                model = st.session_state['trained_model']
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.download_button(
+                        label="Download Trained Model",
+                        data=pickle.dumps(model),
+                        file_name=f"{model_type.lower().replace(' ', '_')}_model.pkl",
+                        mime="application/octet-stream"
+                    ):
+                        st.success("Model downloaded successfully!")
+                
+                with col2:
+                    # Create a container for the save functionality
+                    with st.container():
+                        custom_filename = st.text_input(
+                            "Enter model filename (optional)", 
+                            value=f"{model_type.lower().replace(' ', '_')}_model",
+                            key="model_filename"
+                        )
+                        if st.button("Save Model to Directory"):
+                            model_directory = f"D:/Jason/webapp/ML/model/{name}"
+                            # Add .pkl extension if not present
+                            if not custom_filename.endswith('.pkl'):
+                                custom_filename += '.pkl'
+                            # Create full file path
+                            file_path = os.path.join(model_directory, custom_filename)
+                            # Create directory if it doesn't exist
+                            os.makedirs(model_directory, exist_ok=True)
+                            # Save the model
+                            with open(file_path, 'wb') as f:
+                                pickle.dump(model, f)
+                            st.success(f"Model saved successfully to: {file_path}")
+        else:
+            st.warning("Please upload or select a dataset in the Data Management tab first.")
 
-    # Prediction section
-    if 'pred_df' in st.session_state and 'pred_model' in st.session_state:
-        st.subheader("Make Predictions")
+
+    # Add the new tab3 content:
+    with tab3:
+        st.header("Model Prediction")
         
-        # Select features for prediction
-        available_features = st.session_state['pred_df'].columns.tolist()
-        pred_features = st.multiselect(
-            "Select features for prediction (make sure to match training features)",
-            available_features,
-            key='pred_features'
-        )
+        # Create two columns for uploading
+        col1, col2 = st.columns(2)
         
-        if pred_features and st.button("Make Predictions"):
-            try:
-                if task_type == 'regression':
-                    pred_df = pred_df.fillna(pred_df.mean())
-                X_pred = pred_df[pred_features]
-                
-                # Get predictions
-                predictions = make_predictions(st.session_state['pred_model'], X_pred)
-                
-                # Handle multiple target predictions
-                result_df = st.session_state['pred_df'].copy()
-                
-                if predictions.ndim > 1:  # If multiple target predictions
-                    for i in range(predictions.shape[1]):
-                        result_df[f'Prediction_{i+1}'] = predictions[:, i]
-                else:  # If single target prediction
-                    result_df['Prediction'] = predictions
-                
-                # Display results
-                st.write("Prediction Results:")
-                st.write(result_df)
-                
-                # Download results button
-                csv = result_df.to_csv(index=False)
-                st.download_button(
-                    label="Download Predictions as CSV",
-                    data=csv,
-                    file_name="predictions.csv",
-                    mime="text/csv",
-                )
-                
-            except Exception as e:
-                st.error(f"Error making predictions: {str(e)}")
+        with col1:
+            # Upload data for prediction
+            pred_file = st.file_uploader("Upload Excel or CSV file for prediction", 
+                                        type=["xlsx", "csv"], 
+                                        key="pred_file")
+            if pred_file:
+                if pred_file.name.endswith('.xlsx'):
+                    pred_df = pd.read_excel(pred_file)
+                else:  # CSV file
+                    pred_df = pd.read_csv(pred_file)
+                st.session_state['pred_df'] = pred_df
+                st.write("Prediction Data Preview:")
+                st.write(pred_df)
+        
+        with col2:
+            # Model selection/upload
+            model_source = st.radio("Select model source", ["Upload Model", "Select Saved Model"])
+            
+            if model_source == "Upload Model":
+                uploaded_model = st.file_uploader("Upload model file", type=["pkl"], key="model_upload")
+                if uploaded_model:
+                    model = pickle.loads(uploaded_model.read())
+                    st.session_state['pred_model'] = model
+                    st.success("Model loaded successfully!")
+            
+            else:
+                model_directory = f"D:/Jason/webapp/ML/model/{name}"
+                if os.path.exists(model_directory):
+                    saved_models = load_models(model_directory)
+                    if saved_models:
+                        selected_model = st.selectbox("Select a saved model", saved_models)
+                        if selected_model:
+                            model_path = os.path.join(model_directory, selected_model)
+                            model = load_model(model_path)
+                            st.session_state['pred_model'] = model
+                            st.success("Model loaded successfully!")
+                    else:
+                        st.warning("No saved models found in directory")
+                else:
+                    st.warning("Model directory does not exist")
+
+        # Prediction section
+        if 'pred_df' in st.session_state and 'pred_model' in st.session_state:
+            st.subheader("Make Predictions")
+            
+            # Select features for prediction
+            available_features = st.session_state['pred_df'].columns.tolist()
+            pred_features = st.multiselect(
+                "Select features for prediction (make sure to match training features)",
+                available_features,
+                key='pred_features'
+            )
+            
+            if pred_features and st.button("Make Predictions"):
+                try:
+                    if task_type == 'regression':
+                        pred_df = pred_df.fillna(pred_df.mean())
+                    X_pred = pred_df[pred_features]
+                    
+                    # Get predictions
+                    predictions = make_predictions(st.session_state['pred_model'], X_pred)
+                    
+                    # Handle multiple target predictions
+                    result_df = st.session_state['pred_df'].copy()
+                    
+                    if predictions.ndim > 1:  # If multiple target predictions
+                        for i in range(predictions.shape[1]):
+                            result_df[f'Prediction_{i+1}'] = predictions[:, i]
+                    else:  # If single target prediction
+                        result_df['Prediction'] = predictions
+                    
+                    # Display results
+                    st.write("Prediction Results:")
+                    st.write(result_df)
+                    
+                    # Download results button
+                    csv = result_df.to_csv(index=False)
+                    st.download_button(
+                        label="Download Predictions as CSV",
+                        data=csv,
+                        file_name="predictions.csv",
+                        mime="text/csv",
+                    )
+                    
+                except Exception as e:
+                    st.error(f"Error making predictions: {str(e)}")
