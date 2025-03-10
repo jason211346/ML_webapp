@@ -46,6 +46,15 @@ def save_model_to_directory(model, directory, filename):
         pickle.dump(model, f)
     return file_path
 
+def delete_file(file_path):
+    """Delete a file"""
+    try:
+        os.remove(file_path)
+        return True
+    except Exception as e:
+        st.error(f"Error deleting file: {str(e)}")
+        return False
+
 def load_models(directory):
     """Load models from directory"""
     models = [f for f in os.listdir(directory) if f.endswith('.pkl')]
@@ -133,9 +142,19 @@ def check_password():
 
 
 if __name__ == "__main__":
+
     if not check_password():
         st.stop()
 
+    st.set_page_config(
+        page_title="GIS機器學習平台",
+        page_icon="📊",
+        layout="centered",
+        initial_sidebar_state="expanded",
+        menu_items={
+                'About': "GIS-PD-NTD 開發的機器學習平台"
+            }
+        )
 
     # Streamlit app
     st.title("Machine Learning Platform")
@@ -181,8 +200,19 @@ if __name__ == "__main__":
         files = load_files(directory)
         selected_file = st.selectbox("Select an Excel file from directory", files)
 
-        # Upload file
-        uploaded_file_path = upload_file(directory)
+        # Add delete button for selected file
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            # Existing upload file functionality
+            uploaded_file_path = upload_file(directory)
+        with col2:
+            if selected_file and st.button("Delete Selected File"):
+                file_path = os.path.join(directory, selected_file)
+                if delete_file(file_path):
+                    st.success(f"File {selected_file} deleted successfully!")
+                    st.rerun()
+        # # Upload file
+        # uploaded_file_path = upload_file(directory)
 
         # Read file button
         if st.button("Read File"):
@@ -261,9 +291,10 @@ if __name__ == "__main__":
                             value=f"{model_type.lower().replace(' ', '_')}_model",
                             key="model_filename"
                         )
+                        model_directory = os.path.join(os.getcwd(), "model", name)
                         if st.button("Save Model to Directory"):
                             # model_directory = f"D:/Jason/webapp/ML/model/{name}"
-                            model_directory = os.path.join(os.getcwd(), "model", name)
+                            
                             # Add .pkl extension if not present
                             if not custom_filename.endswith('.pkl'):
                                 custom_filename += '.pkl'
@@ -275,6 +306,20 @@ if __name__ == "__main__":
                             with open(file_path, 'wb') as f:
                                 pickle.dump(model, f)
                             st.success(f"Model saved successfully to: {file_path}")
+                        # Add delete button for saved models
+                        if os.path.exists(model_directory) and load_models(model_directory):
+                            st.markdown("---")
+                            saved_models = load_models(model_directory)
+                            model_to_delete = st.selectbox(
+                                "Select model to delete",
+                                saved_models,
+                                key="model_to_delete"
+                            )
+                            if st.button("Delete Selected Model"):
+                                model_path = os.path.join(model_directory, model_to_delete)
+                                if delete_file(model_path):
+                                    st.success(f"Model {model_to_delete} deleted successfully!")
+                                    st.rerun()
         else:
             st.warning("Please upload or select a dataset in the Data Management tab first.")
 
@@ -317,12 +362,19 @@ if __name__ == "__main__":
                 if os.path.exists(model_directory):
                     saved_models = load_models(model_directory)
                     if saved_models:
-                        selected_model = st.selectbox("Select a saved model", saved_models)
-                        if selected_model:
-                            model_path = os.path.join(model_directory, selected_model)
-                            model = load_model(model_path)
-                            st.session_state['pred_model'] = model
-                            st.success("Model loaded successfully!")
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            selected_model = st.selectbox("Select a saved model", saved_models)
+                            if selected_model:
+                                model_path = os.path.join(model_directory, selected_model)
+                                model = load_model(model_path)
+                                st.session_state['pred_model'] = model
+                                st.success("Model loaded successfully!")
+                        with col2:
+                            if st.button("Delete Model"):
+                                if delete_file(model_path):
+                                    st.success(f"Model {selected_model} deleted successfully!")
+                                    st.rerun()
                     else:
                         st.warning("No saved models found in directory")
                 else:
