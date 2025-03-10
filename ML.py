@@ -62,7 +62,8 @@ def make_predictions(model, data):
 
 def load_names():
     """Load existing names from directories"""
-    base_dir = "D:/Jason/webapp/ML/data"
+    # base_dir = "D:/Jason/webapp/ML/data"
+    base_dir = os.path.join(os.getcwd(), "data")
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     return [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
@@ -78,7 +79,9 @@ def create_new_user():
             with col1:
                 if st.button("OK"):
                     if new_name:
-                        new_dir = f"D:/Jason/webapp/ML/data/{new_name}"
+                        # new_dir = f"D:/Jason/webapp/ML/data/{new_name}"
+                        new_dir = os.path.join(os.getcwd(), "data", new_name)
+                        
                         if not os.path.exists(new_dir):
                             os.makedirs(new_dir)
                             st.session_state['show_dialog'] = False
@@ -173,7 +176,8 @@ if __name__ == "__main__":
     with tab1:
         st.header("Data Upload and Display")
         # Set directory based on selected name
-        directory = f"D:/Jason/webapp/ML/data/{name}"
+        # directory = f"D:/Jason/webapp/ML/data/{name}"
+        directory = os.path.join(os.getcwd(), "data", name)
         files = load_files(directory)
         selected_file = st.selectbox("Select an Excel file from directory", files)
 
@@ -258,7 +262,8 @@ if __name__ == "__main__":
                             key="model_filename"
                         )
                         if st.button("Save Model to Directory"):
-                            model_directory = f"D:/Jason/webapp/ML/model/{name}"
+                            # model_directory = f"D:/Jason/webapp/ML/model/{name}"
+                            model_directory = os.path.join(os.getcwd(), "model", name)
                             # Add .pkl extension if not present
                             if not custom_filename.endswith('.pkl'):
                                 custom_filename += '.pkl'
@@ -307,7 +312,8 @@ if __name__ == "__main__":
                     st.success("Model loaded successfully!")
             
             else:
-                model_directory = f"D:/Jason/webapp/ML/model/{name}"
+                # model_directory = f"D:/Jason/webapp/ML/model/{name}"
+                model_directory = os.path.join(os.getcwd(), "model", name)
                 if os.path.exists(model_directory):
                     saved_models = load_models(model_directory)
                     if saved_models:
