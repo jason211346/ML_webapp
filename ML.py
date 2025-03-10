@@ -72,7 +72,7 @@ def make_predictions(model, data):
 def load_names():
     """Load existing names from directories"""
     # base_dir = "D:/Jason/webapp/ML/data"
-    base_dir = os.path.join(os.getcwd(), "data", username)
+    base_dir = os.path.join(os.getcwd(), username)
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     return [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
@@ -89,7 +89,7 @@ def create_new_Project():
                 if st.button("OK"):
                     if new_name:
                         # new_dir = f"D:/Jason/webapp/ML/data/{new_name}"
-                        new_dir = os.path.join(os.getcwd(), "data", username, new_name)
+                        new_dir = os.path.join(os.getcwd(), username, new_name, "data")
                         
                         if not os.path.exists(new_dir):
                             os.makedirs(new_dir)
@@ -166,13 +166,66 @@ def check_password():
     
     return False
 
+def logout():
+    """Clear all session state variables and log out"""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    return True
+def show_logout_dialog():
+    """Show a confirmation dialog for logout"""
+    if 'show_logout_dialog' not in st.session_state:
+        st.session_state['show_logout_dialog'] = False
+
+    if st.session_state.get('show_logout_dialog', False):
+        with st.sidebar:
+            dialog = st.empty()
+            with dialog.container():
+                st.write("Confirm Logout")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Confirm"):
+                        if logout():
+                            st.rerun()
+                with col2:
+                    if st.button("Cancel"):
+                        st.session_state['show_logout_dialog'] = False
+                        dialog.empty()
+
+def show_delete_project_dialog(project_name):
+    """Show a confirmation dialog for project deletion"""
+    if 'show_delete_dialog' not in st.session_state:
+        st.session_state['show_delete_dialog'] = False
+
+    if st.session_state.get('show_delete_dialog', False):
+        with st.sidebar:
+            dialog = st.empty()
+            with dialog.container():
+                st.write(f"Delete Project: {project_name}?")
+                st.write("⚠️ This action cannot be undone!")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Delete", type="primary"):
+                        project_path = os.path.join(os.getcwd(), username, project_name)
+                        try:
+                            import shutil
+                            shutil.rmtree(project_path)
+                            st.session_state['Project'] = load_names()
+                            st.session_state['selected_project'] = None
+                            st.session_state['show_delete_dialog'] = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting project: {str(e)}")
+                with col2:
+                    if st.button("Cancel"):
+                        st.session_state['show_delete_dialog'] = False
+                        dialog.empty()
+
 if __name__ == "__main__":
 
     check = check_password()
-    
-
     if not check:
         st.stop()
+
     username = st.session_state["authenticated_user"]
     st.set_page_config(
         page_title="GIS機器學習平台",
@@ -189,6 +242,22 @@ if __name__ == "__main__":
 
     # Sidebar for selecting name
     st.sidebar.header("Project Selection")
+
+    col1, col2 = st.sidebar.columns([5,1])
+    with col1:
+        st.header(f"👤 {username}")
+    with col2:
+        if st.button("🚪", help="Logout"):
+            st.session_state['show_logout_dialog'] = True
+
+    if st.session_state.get('show_logout_dialog', False):
+        show_logout_dialog()
+
+    st.sidebar.markdown("---")  # Add separator line
+
+    # Project section header
+    st.sidebar.subheader("Project Selection")
+
 
     # Initialize session state
     if 'show_dialog' not in st.session_state:
@@ -207,12 +276,21 @@ if __name__ == "__main__":
         if create_new_Project():
             st.sidebar.success("New Project created successfully!")
 
-    # # Project selection dropdown
-    name = st.sidebar.selectbox(
-        "Select Project",
-        options=st.session_state['Project'],
-        index=st.session_state['Project'].index(st.session_state['selected_project']) if st.session_state['selected_project'] in st.session_state['Project'] else 0
-    ) if st.session_state['Project'] else None
+        # Project selection section
+    col1, col2 = st.sidebar.columns([6,1])
+    with col1:
+        name = st.selectbox(
+            "Select Project",
+            options=st.session_state['Project'],
+            index=st.session_state['Project'].index(st.session_state['selected_project']) 
+            if st.session_state['selected_project'] in st.session_state['Project'] else 0
+        ) if st.session_state['Project'] else None
+    with col2:
+        if name and st.button("🗑️", help="Delete Project"):
+            st.session_state['show_delete_dialog'] = True
+
+    if st.session_state.get('show_delete_dialog', False):
+        show_delete_project_dialog(name)
 
     if not st.session_state['Project']:
         st.sidebar.warning("No Project found. Please create a new Project.")
@@ -226,7 +304,7 @@ if __name__ == "__main__":
             st.header("Data Upload and Display")
             # Set directory based on selected name
             # directory = f"D:/Jason/webapp/ML/data/{name}"
-            directory = os.path.join(os.getcwd(), "data", username, name)
+            directory = os.path.join(os.getcwd(), username, name, "data")
             files = load_files(directory)
             selected_file = st.selectbox("Select an Excel file from directory", files)
 
@@ -321,7 +399,7 @@ if __name__ == "__main__":
                                 value=f"{model_type.lower().replace(' ', '_')}_model",
                                 key="model_filename"
                             )
-                            model_directory = os.path.join(os.getcwd(), "model" ,username , name)
+                            model_directory = os.path.join(os.getcwd() ,username , name, "model")
                             if st.button("Save Model to Directory"):
                                 # model_directory = f"D:/Jason/webapp/ML/model/{name}"
                                 
@@ -388,7 +466,7 @@ if __name__ == "__main__":
                 
                 else:
                     # model_directory = f"D:/Jason/webapp/ML/model/{name}"
-                    model_directory = os.path.join(os.getcwd(), "model" ,username , name)
+                    model_directory = os.path.join(os.getcwd() ,username , name, "model")
                     if os.path.exists(model_directory):
                         saved_models = load_models(model_directory)
                         if saved_models:
@@ -455,3 +533,4 @@ if __name__ == "__main__":
                         
                     except Exception as e:
                         st.error(f"Error making predictions: {str(e)}")
+
