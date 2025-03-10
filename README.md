@@ -28,5 +28,3 @@ streamlit run app.py
 7. Save or download the trained model.
 8. Use the prediction module to make predictions on new data.
 
-## Web Application
-Access the online version of the platform here: [Machine Learning Platform](https://mlwebapp-gispdntd.streamlit.app/)
