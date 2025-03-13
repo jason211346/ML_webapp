@@ -15,7 +15,7 @@ To set up the platform locally, install the dependencies and launch the Streamli
 
 ```sh  
 pip install streamlit pandas plotly scikit-learn xgboost lightgbm  
-streamlit run app.py  
+streamlit run ML.py  
 ```
 
 ## 🚀 How to Use  

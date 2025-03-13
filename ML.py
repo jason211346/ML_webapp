@@ -6,7 +6,7 @@ import hmac
 
 import plotly.express as px
 import pickle
-from Train_2 import train_and_plot
+from Train import train_and_plot
 
 # Function to upload file
 def upload_file(directory):
