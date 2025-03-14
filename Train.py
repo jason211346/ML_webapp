@@ -34,19 +34,24 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
     if task_type == 'regression':
         df = df.fillna(df.mean())
     
+
     X = df[x_columns]
     y = df[y_columns]
-
+    
     # Initialize scalers
     x_scaler = StandardScaler()
     y_scaler = StandardScaler() if task_type == 'regression' else None
-    
+
     # Scale features (X)
     X_scaled = x_scaler.fit_transform(X)
     X_scaled = pd.DataFrame(X_scaled, columns=x_columns)
     
     # Handle classification and regression differently for y
     if task_type == 'classification':
+
+        X = df[x_columns]
+        y = df[y_columns]
+    
         if len(y_columns) == 1:
             le = LabelEncoder()
             y = le.fit_transform(y)
@@ -61,14 +66,21 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
                 class_encoders[col] = le_col
             y = y_encoded
             class_encoder = class_encoders
+
+
+            # Split the scaled data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+
     else:  # regression
         # Scale target variable(s) for regression
         y = y_scaler.fit_transform(y)
 
-    # Split the scaled data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=0.2, random_state=42
-    )
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=0.2, random_state=42
+        )
+
 
     # Model selection based on task type and model type
     models = {
@@ -95,6 +107,9 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
 
     # Evaluate model based on task type
     if task_type == 'regression':
+
+        
+
         # Inverse transform predictions and actual values for proper evaluation
         y_train_orig = y_scaler.inverse_transform(y_train)
         y_test_orig = y_scaler.inverse_transform(y_test)

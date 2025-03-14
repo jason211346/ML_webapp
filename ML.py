@@ -82,31 +82,70 @@ def load_model(model_path):
 #     except Exception as e:
 #             st.error(f"Prediction error: {e}")
 #             return None
+# def make_predictions(model_data, data, x_columns):
+#     """Make predictions using the model with proper scaling."""
+#     model = model_data['model']
+#     x_scaler = model_data['x_scaler']
+#     y_scaler = model_data['y_scaler']
+    
+#     try:
+#         # 選擇需要的列並確保順序正確
+#         data_for_prediction = data[x_columns]
+        
+#         # 標準化輸入數據
+#         X_scaled = x_scaler.transform(data_for_prediction)
+        
+#         # 進行預測
+#         scaled_predictions = model.predict(X_scaled)
+        
+#         # 反標準化預測結果
+#         predictions = y_scaler.inverse_transform(scaled_predictions.reshape(-1, 1))
+        
+#         return predictions
+        
+#     except Exception as e:
+#         st.error(f"Prediction error: {e}")
+#         return None
+
 def make_predictions(model_data, data, x_columns):
-    """Make predictions using the model with proper scaling."""
+    """Make predictions using the model with proper scaling for both classification and regression."""
     model = model_data['model']
     x_scaler = model_data['x_scaler']
     y_scaler = model_data['y_scaler']
+    class_encoder = model_data['class_encoder']
+    task_type = model_data['task_type']
     
     try:
-        # 選擇需要的列並確保順序正確
+        # Select required columns and ensure correct order
         data_for_prediction = data[x_columns]
         
-        # 標準化輸入數據
-        X_scaled = x_scaler.transform(data_for_prediction)
         
-        # 進行預測
-        scaled_predictions = model.predict(X_scaled)
         
-        # 反標準化預測結果
-        predictions = y_scaler.inverse_transform(scaled_predictions.reshape(-1, 1))
-        
-        return predictions
-        
+        # Handle predictions based on task type
+        if task_type == 'classification':
+            # Scale input data
+            #             
+            # Make predictions
+            predictions = model.predict(data_for_prediction)
+            if isinstance(class_encoder, dict):  # Multiple target columns
+                final_predictions = pd.DataFrame()
+                for col, encoder in class_encoder.items():
+                    final_predictions[col] = encoder.inverse_transform(predictions[col])
+                return final_predictions
+            else:  # Single target column
+                return class_encoder.inverse_transform(predictions)
+        else:  # regression
+            # Inverse transform predictions for regression
+            # Scale input data
+            X_scaled = x_scaler.transform(data_for_prediction)
+            
+            # Make predictions
+            predictions = model.predict(X_scaled)
+            return y_scaler.inverse_transform(predictions.reshape(-1, 1))
+            
     except Exception as e:
         st.error(f"Prediction error: {e}")
         return None
-
 
 def load_names():
     """Load existing names from directories"""
@@ -729,18 +768,18 @@ if __name__ == "__main__":
            if 'pred_model' in st.session_state:
                 model_data = st.session_state['pred_model']
                 model = model_data['model']
-                x_columns = model_data['x_columns']  # Get X columns from loaded model
-                task_type = model_data['task_type']  # Get task_type from loaded model
+                x_columns = model_data['x_columns']
+                task_type = model_data['task_type']
 
                 # File Upload for Prediction
-                pred_file = st.file_uploader("Upload Excel or CSV file for prediction", type=["xlsx", "csv"], key="pred_file")
+                pred_file = st.file_uploader("Upload Excel or CSV file for prediction", 
+                                            type=["xlsx", "csv"], key="pred_file")
                 if pred_file:
                     if pred_file.name.endswith('.xlsx'):
                         pred_df = pd.read_excel(pred_file)
                     else:
                         pred_df = pd.read_csv(pred_file)
 
-                    # --- KEY CHANGE: Check against loaded x_columns ---
                     if set(x_columns).issubset(pred_df.columns):
                         st.write("Prediction Data Preview:")
                         st.write(pred_df)
@@ -748,12 +787,22 @@ if __name__ == "__main__":
                         if st.button("Make Predictions"):
                             predictions = make_predictions(model_data, pred_df, x_columns)
                             if predictions is not None:
-                                # 添加未標準化的預測結果到 DataFrame
-                                for i, col in enumerate(model_data['y_columns']):
-                                    pred_df[f'{col}_pred'] = predictions[:, i]
+                                if task_type == 'classification':
+                                    # Handle classification predictions
+                                    if isinstance(predictions, pd.DataFrame):  # Multiple target columns
+                                        for col in predictions.columns:
+                                            pred_df[f'{col}_pred'] = predictions[col]
+                                    else:  # Single target column
+                                        pred_df[f'{model_data["y_columns"][0]}_pred'] = predictions
+                                else:  # regression
+                                    # Handle regression predictions
+                                    for i, col in enumerate(model_data['y_columns']):
+                                        pred_df[f'{col}_pred'] = predictions[:, i]
+                                
                                 st.write("Prediction Results:")
                                 st.write(pred_df)
 
+                                # Add download button
                                 csv = pred_df.to_csv(index=False)
                                 st.download_button(
                                     label="Download Predictions as CSV",
