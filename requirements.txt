@@ -13,3 +13,4 @@ seaborn==0.13.2
 streamlit==1.40.0
 streamlit_folium==0.23.1
 xgboost==2.1.4
+openpyxl==3.1.5
