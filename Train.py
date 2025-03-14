@@ -22,42 +22,53 @@ import xgboost as xgb
 from lightgbm import LGBMRegressor, LGBMClassifier
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import StandardScaler
+
 
 def train_and_plot(df, x_columns, y_columns, task_type, model_type):
     """
-    Train model and plot performance metrics
+    Train model and plot performance metrics with standardization
     task_type: 'regression' or 'classification'
     """
     # Handle missing values
-    # breakpoint()
     if task_type == 'regression':
         df = df.fillna(df.mean())
     
     X = df[x_columns]
-    y = df[y_columns] # Convert to 1D array for classification
+    y = df[y_columns]
+
+    # Initialize scalers
+    x_scaler = StandardScaler()
+    y_scaler = StandardScaler() if task_type == 'regression' else None
     
-    # Add label encoding for classification tasks
+    # Scale features (X)
+    X_scaled = x_scaler.fit_transform(X)
+    X_scaled = pd.DataFrame(X_scaled, columns=x_columns)
+    
+    # Handle classification and regression differently for y
     if task_type == 'classification':
-        le = LabelEncoder()
-        # Handle single or multiple target columns
         if len(y_columns) == 1:
+            le = LabelEncoder()
             y = le.fit_transform(y)
             st.write("Classes:", dict(enumerate(le.classes_)))
+            class_encoder = le
         else:
-            # Create a new DataFrame for encoded targets
             y_encoded = pd.DataFrame()
-            class_mappings = {}
-            
-            # Encode each target column separately
+            class_encoders = {}
             for col in y_columns:
                 le_col = LabelEncoder()
                 y_encoded[col] = le_col.fit_transform(y[col])
-                class_mappings[col] = dict(enumerate(le_col.classes_))
-            
+                class_encoders[col] = le_col
             y = y_encoded
-            st.write("Class mappings for each target:", class_mappings)
+            class_encoder = class_encoders
+    else:  # regression
+        # Scale target variable(s) for regression
+        y = y_scaler.fit_transform(y)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Split the scaled data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_scaled, y, test_size=0.2, random_state=42
+    )
 
     # Model selection based on task type and model type
     models = {
@@ -76,7 +87,7 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
             "LightGBM": LGBMClassifier(random_state=42)
         }
     }
-
+    
     model = models[task_type][model_type]
     model.fit(X_train, y_train)
     y_train_pred = model.predict(X_train)
@@ -84,10 +95,16 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
 
     # Evaluate model based on task type
     if task_type == 'regression':
-        train_score = r2_score(y_train, y_train_pred)
-        test_score = r2_score(y_test, y_test_pred)
-        train_error = mean_squared_error(y_train, y_train_pred)
-        test_error = mean_squared_error(y_test, y_test_pred)
+        # Inverse transform predictions and actual values for proper evaluation
+        y_train_orig = y_scaler.inverse_transform(y_train)
+        y_test_orig = y_scaler.inverse_transform(y_test)
+        y_train_pred_orig = y_scaler.inverse_transform(y_train_pred.reshape(-1, 1))
+        y_test_pred_orig = y_scaler.inverse_transform(y_test_pred.reshape(-1, 1))
+        
+        train_score = r2_score(y_train_orig, y_train_pred_orig)
+        test_score = r2_score(y_test_orig, y_test_pred_orig)
+        train_error = mean_squared_error(y_train_orig, y_train_pred_orig)
+        test_error = mean_squared_error(y_test_orig, y_test_pred_orig)
         
         metrics_df = pd.DataFrame({
             'Metric': ['Train R²', 'Test R²', 'Train MSE', 'Test MSE'],
@@ -99,14 +116,11 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
         st.write(f"Train MSE: {train_error:.2f}")
         st.write(f"Test MSE: {test_error:.2f}")
 
-    else:  # classification
+    else:  # classification (no need to inverse transform)
         train_score = accuracy_score(y_train, y_train_pred)
         test_score = accuracy_score(y_test, y_test_pred)
         
         st.write("Classification Report:")
-        # st.text(classification_report(y_test, y_test_pred))
-        
-        # Plot confusion matrix
         cm = confusion_matrix(y_test, y_test_pred)
         fig_cm = px.imshow(cm, 
                           labels=dict(x="Predicted", y="Actual"),
@@ -118,7 +132,6 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
             'Metric': ['Train Accuracy', 'Test Accuracy'],
             'Value': [train_score, test_score]
         })
-
     # Plot performance metrics
     fig = px.bar(metrics_df, x='Metric', y='Value', 
                  title=f'Model Performance Metrics - {model_type}')
@@ -141,5 +154,14 @@ def train_and_plot(df, x_columns, y_columns, task_type, model_type):
     fig = px.bar(importance_df, x='Importance', y='Feature', 
                  title='Feature Importance', orientation='h')
     st.plotly_chart(fig)
-
-    return model
+    model_data = {
+        'model': model,
+        'x_scaler': x_scaler,
+        'y_scaler': y_scaler if task_type == 'regression' else None,
+        'class_encoder': class_encoder if task_type == 'classification' else None,
+        'x_columns': x_columns,
+        'y_columns': y_columns,
+        'task_type': task_type
+    }
+    
+    return model_data
